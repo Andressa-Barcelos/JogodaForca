@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Forca da Andressa</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f5f5f5;
+      margin: 0;
+      padding: 0;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 50px auto;
+      background: #fff;
+      padding: 40px;
+      border-radius: 10px;
+      box-shadow: 0 0 20px rgba(0,0,0,0.1);
+      text-align: center;
+    }
+
+    h1 {
+      color: #ff69b4;
+      margin-bottom: 30px;
+    }
+
+    .question {
+      font-weight: bold;
+      font-size: 18px;
+      margin-bottom: 20px;
+      color: #444;
+    }
+
+    .word-display {
+      font-size: 28px;
+      letter-spacing: 8px;
+      margin-bottom: 20px;
+    }
+
+    .input-letter {
+      font-size: 22px;
+      padding: 8px;
+      width: 50px;
+      text-align: center;
+    }
+
+    .feedback {
+      font-size: 18px;
+      margin-top: 10px;
+      font-weight: bold;
+    }
+
+    svg line, svg circle {
+      stroke: #333;
+      stroke-width: 4;
+    }
+
+    .hide {
+      visibility: hidden;
+    }
+
+    .hangman-container {
+      margin: 20px auto;
+    }
+
+    .timer {
+      font-size: 18px;
+      margin-top: 15px;
+      font-weight: bold;
+      color: #d9534f;
+    }
+
+    .score {
+      font-size: 22px;
+      font-weight: bold;
+      margin-top: 30px;
+      white-space: pre-wrap;
+    }
+
+    .nav-buttons {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .nav-buttons button {
+      background-color: #ff69b4;
+      color: white;
+      padding: 10px 20px;
+      font-size: 16px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>✨ Forca da Andressa ✨</h1>
+  <div class="hangman-container">
+    <svg width="120" height="160">
+      <line x1="10" y1="150" x2="110" y2="150" />
+      <line x1="40" y1="150" x2="40" y2="10" />
+      <line x1="40" y1="10" x2="90" y2="10" />
+      <line x1="90" y1="10" x2="90" y2="30" />
+      <circle id="head" class="hide" cx="90" cy="45" r="10" />
+      <line id="body" class="hide" x1="90" y1="55" x2="90" y2="100" />
+      <line id="arm-left" class="hide" x1="90" y1="60" x2="70" y2="80" />
+      <line id="arm-right" class="hide" x1="90" y1="60" x2="110" y2="80" />
+      <line id="leg-left" class="hide" x1="90" y1="100" x2="70" y2="130" />
+      <line id="leg-right" class="hide" x1="90" y1="100" x2="110" y2="130" />
+    </svg>
+  </div>
+
+  <div class="question" id="questionText"></div>
+  <div class="word-display" id="wordDisplay"></div>
+  <input type="text" maxlength="1" id="letterInput" class="input-letter" onkeyup="handleInput(event)" autofocus>
+  <div class="feedback" id="feedback"></div>
+  <div class="timer" id="timer"></div>
+  <div class="nav-buttons">
+    <button onclick="prevQuestion()">Pergunta Anterior</button>
+    <button id="nextButton" onclick="nextQuestion()">Próxima Pergunta</button>
+  </div>
+  <div class="score" id="finalScore" style="display:none;"></div>
+</div>
+
+<script>
+const questions = [
+  { question: "1- Um usuário entrou no chat com o código da avaliação 151446591 e deseja saber quem aplicou. Como você pode pesquisar?", answer: "SELECTFROMclavaliacaocaWHEREid151446591", fullAnswer: "SELECT * FROM cl_avaliacao ca\nWHERE id = 151446591" },
+  { question: "2- Joana quer saber quantos planos de ação tem nesta avaliação 151446591. Qual query utilizar?", answer: "SELECTFROMclplanoacaoWHEREidavaliacao151446591", fullAnswer: "SELECT * FROM cl_plano_acao\nWHERE id_avaliacao = 151446591" },
+  { question: "3- O estagiário aplicou um workflow e tem apenas o código da primeira etapa 136229001. Ele deseja saber o código das outras etapas. Qual query pode nos ajudar?", answer: "SELECTFROMclavaliacaofluxotrabalhocaftWHEREidavaliacaoprimeiraetapa136229001", fullAnswer: "SELECT * FROM cl_avaliacao_fluxo_trabalho caft\nWHERE id_avaliacao_primeira_etapa = 136229001" },
+  { question: "4- O Enzo deseja saber quantos checklist ativos tem na sua base. Como podemos pesquisar?", answer: "SELECTFROMclversaocvWHEREidempresa16013andativosANDdeletedatisnull", fullAnswer: "SELECT * FROM cl_versao cv\nWHERE id_empresa = 16013 and ativo = 's'\nAND deleted_at is null" },
+  { question: "5- O usuário id 435472 quer saber todas as suas aplicações do período de 10/03/2025 a 10/07/2025. Qual query usar?", answer: "SELECTFROMclavaliacaacawhereidusuario435472aNDdatainiBETWEEN20250310000000and20250710235959", fullAnswer: "SELECT * FROM cl_avaliacao ca\nWHERE id_usuario = 435472\nAND data_ini BETWEEN '2025-03-10 00:00:00' and '2025-07-10 23:59:59'" }
+];
+
+let current = 0, revealed = [], guessed = [], mistakes = 0, timeLeft = 300, timerInterval;
+const parts = ["head", "body", "arm-left", "arm-right", "leg-left", "leg-right"];
+
+function initQuestion() {
+  document.getElementById("feedback").innerText = "";
+  guessed = [];
+  mistakes = 0;
+  document.getElementById("letterInput").disabled = false;
+  document.getElementById("nextButton").style.display = "none";
+  document.getElementById("finalScore").innerText = "";
+  document.getElementById("finalScore").style.display = "none";
+  parts.forEach(p => document.getElementById(p).classList.add("hide"));
+
+  const q = questions[current];
+  revealed = q.answer.split('').map(c => c === ' ' ? ' ' : '_');
+  document.getElementById("questionText").innerText = q.question;
+  updateDisplay();
+
+  timeLeft = 300;
+  clearInterval(timerInterval);
+  timerInterval = setInterval(updateTimer, 1000);
+}
+
+function updateDisplay() {
+  document.getElementById("wordDisplay").innerText = revealed.join(" ");
+}
+
+function updateTimer() {
+  timeLeft--;
+  document.getElementById("timer").innerText = `Tempo restante: ${Math.floor(timeLeft / 60)}m ${timeLeft % 60}s`;
+  if (timeLeft <= 0) {
+    clearInterval(timerInterval);
+    endGame(false);
+  }
+}
+
+function handleInput(event) {
+  const input = event.target.value.toUpperCase();
+  event.target.value = "";
+  if (!input.match(/[A-Z0-9]/) || guessed.includes(input)) return;
+  guessed.push(input);
+
+  const answer = questions[current].answer.toUpperCase();
+  if (answer.includes(input)) {
+    for (let i = 0; i < answer.length; i++) {
+      if (answer[i] === input) revealed[i] = input;
+    }
+    document.getElementById("feedback").innerText = "✨ Letra correta! Muito bem! ✨";
+  } else {
+    mistakes++;
+    if (mistakes <= parts.length) {
+      document.getElementById(parts[mistakes - 1]).classList.remove("hide");
+    }
+    document.getElementById("feedback").innerText = "Letra incorreta!";
+  }
+
+  updateDisplay();
+  checkGameOver();
+}
+
+function checkGameOver() {
+  if (!revealed.includes("_")) {
+    clearInterval(timerInterval);
+    document.getElementById("nextButton").style.display = "inline-block";
+    document.getElementById("letterInput").disabled = true;
+    document.getElementById("finalScore").innerText = "🎉 Parabéns! Você acertou a resposta! 🎉";
+    document.getElementById("finalScore").style.display = "block";
+  } else if (mistakes >= parts.length) {
+    clearInterval(timerInterval);
+    endGame(false);
+  }
+}
+
+function nextQuestion() {
+  if (current < questions.length - 1) {
+    current++;
+    initQuestion();
+  } else {
+    document.getElementById("finalScore").innerText = "Você completou todas as perguntas!";
+    document.getElementById("finalScore").style.display = "block";
+  }
+}
+
+function prevQuestion() {
+  if (current > 0) {
+    current--;
+    initQuestion();
+  }
+}
+
+function endGame(success) {
+  const msg = success ? "Parabéns!" : `Fim de jogo! A resposta era:\n${questions[current].fullAnswer}`;
+  document.getElementById("finalScore").innerText = msg;
+  document.getElementById("finalScore").style.display = "block";
+  document.getElementById("letterInput").disabled = true;
+  document.getElementById("nextButton").style.display = "inline-block";
+}
+
+window.onload = initQuestion;
+</script>
+</body>
+</html>>
